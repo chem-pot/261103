@@ -1,0 +1,1128 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>단백질 형성 시뮬레이션</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700;900&display=swap');
+
+:root {
+  --bg: #070b14;
+  --panel: rgba(255,255,255,0.04);
+  --border: rgba(255,255,255,0.10);
+  --blue: #4fc3f7;
+  --cyan: #00e5ff;
+  --green: #69ff94;
+  --orange: #ffab40;
+  --pink: #ff4f8b;
+  --purple: #ce93d8;
+  --yellow: #ffe57f;
+  --N: #5c9eff;
+  --C: #b0bec5;
+  --O: #ff6e6e;
+  --H: #e0e0e0;
+  --R1: #ffca28;
+  --R2: #66bb6a;
+  --peptide: #ff4f8b;
+}
+
+* { margin:0; padding:0; box-sizing:border-box; }
+
+body {
+  font-family: 'Noto Sans KR', sans-serif;
+  background: var(--bg);
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 24px 16px 40px;
+  overflow-x: hidden;
+}
+
+/* ── 별 배경 ── */
+body::before {
+  content:'';
+  position: fixed;
+  inset: 0;
+  background:
+    radial-gradient(ellipse at 20% 20%, rgba(79,195,247,0.06) 0%, transparent 60%),
+    radial-gradient(ellipse at 80% 80%, rgba(105,255,148,0.05) 0%, transparent 60%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* ── 헤더 ── */
+.header {
+  text-align: center;
+  margin-bottom: 22px;
+  position: relative;
+  z-index: 1;
+}
+
+.header-badge {
+  display: inline-block;
+  background: linear-gradient(135deg, rgba(79,195,247,0.2), rgba(105,255,148,0.2));
+  border: 1px solid rgba(79,195,247,0.4);
+  border-radius: 30px;
+  padding: 5px 18px;
+  font-size: 11px;
+  color: var(--cyan);
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  margin-bottom: 10px;
+}
+
+h1 {
+  font-size: 28px;
+  font-weight: 900;
+  color: #fff;
+  letter-spacing: -0.5px;
+  line-height: 1.2;
+}
+
+h1 span {
+  background: linear-gradient(90deg, var(--cyan), var(--green));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.header-sub {
+  margin-top: 7px;
+  font-size: 13px;
+  color: rgba(255,255,255,0.45);
+  font-weight: 300;
+}
+
+/* ── 진행 트래커 ── */
+.tracker {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  margin-bottom: 22px;
+  position: relative;
+  z-index: 1;
+}
+
+.track-step {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  position: relative;
+}
+
+.track-dot {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 2px solid rgba(255,255,255,0.15);
+  background: rgba(255,255,255,0.05);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 700;
+  color: rgba(255,255,255,0.3);
+  transition: all 0.4s ease;
+  position: relative;
+  z-index: 2;
+}
+
+.track-dot.done {
+  background: linear-gradient(135deg, var(--cyan), var(--green));
+  border-color: transparent;
+  color: #0a0f1e;
+  box-shadow: 0 0 14px rgba(0,229,255,0.5);
+}
+
+.track-dot.active {
+  border-color: var(--cyan);
+  color: var(--cyan);
+  box-shadow: 0 0 0 4px rgba(0,229,255,0.15), 0 0 14px rgba(0,229,255,0.3);
+  animation: trackPulse 2s ease-in-out infinite;
+}
+
+@keyframes trackPulse {
+  0%,100% { box-shadow: 0 0 0 4px rgba(0,229,255,0.15), 0 0 14px rgba(0,229,255,0.3); }
+  50%      { box-shadow: 0 0 0 8px rgba(0,229,255,0.08), 0 0 22px rgba(0,229,255,0.5); }
+}
+
+.track-label {
+  font-size: 10px;
+  color: rgba(255,255,255,0.35);
+  text-align: center;
+  max-width: 60px;
+  transition: color 0.3s;
+  white-space: nowrap;
+}
+
+.track-label.active { color: var(--cyan); }
+.track-label.done   { color: var(--green); }
+
+.track-line {
+  width: 52px;
+  height: 2px;
+  background: rgba(255,255,255,0.1);
+  position: relative;
+  bottom: 14px;
+  transition: background 0.4s;
+}
+
+.track-line.done { background: linear-gradient(90deg, var(--cyan), var(--green)); }
+
+/* ── 메인 카드 ── */
+.main-card {
+  width: 100%;
+  max-width: 860px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 28px;
+  padding: 28px 24px 22px;
+  position: relative;
+  z-index: 1;
+  backdrop-filter: blur(20px);
+  box-shadow: 0 40px 80px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.08);
+  min-height: 380px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+/* 카드 상단 코너 글로우 */
+.main-card::before {
+  content:'';
+  position: absolute;
+  top: -1px; left: -1px; right: -1px;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, var(--cyan), var(--green), transparent);
+  border-radius: 28px 28px 0 0;
+}
+
+.card-tag {
+  position: absolute;
+  top: 16px;
+  left: 22px;
+  font-size: 11px;
+  color: rgba(255,255,255,0.3);
+  letter-spacing: 1px;
+}
+
+.card-step-num {
+  position: absolute;
+  top: 14px;
+  right: 20px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--cyan);
+  background: rgba(0,229,255,0.1);
+  border: 1px solid rgba(0,229,255,0.2);
+  border-radius: 20px;
+  padding: 4px 14px;
+}
+
+/* ── SVG ── */
+.mol-svg {
+  width: 100%;
+  max-width: 820px;
+  height: 280px;
+  overflow: visible;
+}
+
+/* ── 범례 ── */
+.legend {
+  display: flex;
+  gap: 14px;
+  flex-wrap: wrap;
+  justify-content: center;
+  margin-top: 10px;
+  padding: 10px 16px;
+  background: rgba(255,255,255,0.03);
+  border-radius: 12px;
+  border: 1px solid rgba(255,255,255,0.06);
+}
+
+.leg-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11.5px;
+  color: rgba(255,255,255,0.6);
+}
+
+.leg-dot {
+  width: 12px; height: 12px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+/* ── 설명 패널 ── */
+.desc-panel {
+  width: 100%;
+  max-width: 860px;
+  margin-top: 16px;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  overflow: hidden;
+  position: relative;
+  z-index: 1;
+  backdrop-filter: blur(20px);
+  box-shadow: 0 20px 40px rgba(0,0,0,0.3);
+}
+
+.desc-accent {
+  width: 4px;
+  background: linear-gradient(180deg, var(--cyan), var(--green));
+  flex-shrink: 0;
+}
+
+.desc-inner {
+  padding: 18px 22px;
+}
+
+.desc-top {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.desc-icon-wrap {
+  width: 34px; height: 34px;
+  border-radius: 10px;
+  background: linear-gradient(135deg, rgba(0,229,255,0.2), rgba(105,255,148,0.2));
+  border: 1px solid rgba(0,229,255,0.25);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  flex-shrink: 0;
+}
+
+.desc-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: #fff;
+}
+
+.desc-text {
+  font-size: 13px;
+  color: rgba(255,255,255,0.7);
+  line-height: 1.8;
+  font-weight: 300;
+}
+
+.desc-text b { color: #fff; font-weight: 600; }
+
+/* 인라인 하이라이트 */
+.hl  { color: var(--cyan);   background: rgba(0,229,255,0.12);   border-radius:4px; padding:1px 6px; font-weight:600; }
+.hlo { color: var(--orange); background: rgba(255,171,64,0.15);  border-radius:4px; padding:1px 6px; font-weight:600; }
+.hlg { color: var(--green);  background: rgba(105,255,148,0.12); border-radius:4px; padding:1px 6px; font-weight:600; }
+.hlp { color: var(--pink);   background: rgba(255,79,139,0.15);  border-radius:4px; padding:1px 6px; font-weight:600; }
+.hly { color: var(--yellow); background: rgba(255,229,127,0.12); border-radius:4px; padding:1px 6px; font-weight:600; }
+
+/* ── 케미컬 공식 칩 ── */
+.formula-chips {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+}
+
+.chip {
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 8px;
+  padding: 4px 12px;
+  font-size: 12px;
+  color: rgba(255,255,255,0.75);
+  font-family: monospace;
+}
+
+.chip.cyan   { border-color: rgba(0,229,255,0.3);   color: var(--cyan);   background: rgba(0,229,255,0.06); }
+.chip.orange { border-color: rgba(255,171,64,0.3);  color: var(--orange); background: rgba(255,171,64,0.06); }
+.chip.pink   { border-color: rgba(255,79,139,0.3);  color: var(--pink);   background: rgba(255,79,139,0.06); }
+.chip.green  { border-color: rgba(105,255,148,0.3); color: var(--green);  background: rgba(105,255,148,0.06); }
+
+/* ── 버튼 ── */
+.btn-area {
+  display: flex;
+  gap: 12px;
+  margin-top: 20px;
+  position: relative;
+  z-index: 1;
+}
+
+.btn-next {
+  position: relative;
+  background: linear-gradient(135deg, #0097b2, #00c6b8);
+  color: #fff;
+  border: none;
+  border-radius: 50px;
+  padding: 14px 42px;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+  font-family: 'Noto Sans KR', sans-serif;
+  letter-spacing: 0.5px;
+  transition: all 0.3s;
+  box-shadow: 0 8px 24px rgba(0,198,184,0.35);
+  overflow: hidden;
+}
+
+.btn-next::before {
+  content:'';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, rgba(255,255,255,0.15), transparent);
+  border-radius: 50px;
+}
+
+.btn-next:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 14px 32px rgba(0,198,184,0.5);
+}
+
+.btn-next:disabled {
+  background: rgba(255,255,255,0.08);
+  color: rgba(255,255,255,0.3);
+  box-shadow: none;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.btn-reset {
+  background: transparent;
+  color: rgba(255,255,255,0.5);
+  border: 1px solid rgba(255,255,255,0.15);
+  border-radius: 50px;
+  padding: 14px 28px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  font-family: 'Noto Sans KR', sans-serif;
+  transition: all 0.3s;
+}
+
+.btn-reset:hover {
+  border-color: rgba(255,255,255,0.35);
+  color: rgba(255,255,255,0.85);
+  background: rgba(255,255,255,0.04);
+}
+
+/* ── SVG 애니메이션 ── */
+.svg-fadein { animation: sfade 0.7s ease both; }
+@keyframes sfade {
+  from { opacity:0; transform:translateY(16px); }
+  to   { opacity:1; transform:translateY(0); }
+}
+
+.glow-peptide {
+  filter: drop-shadow(0 0 7px rgba(255,79,139,0.9));
+  animation: glowAlt 1.4s ease-in-out infinite alternate;
+}
+@keyframes glowAlt {
+  from { filter: drop-shadow(0 0 4px rgba(255,79,139,0.6)); }
+  to   { filter: drop-shadow(0 0 16px rgba(255,79,139,1)); }
+}
+
+.water-anim { animation: wAnim 2.2s ease-in-out infinite; }
+@keyframes wAnim {
+  0%,100% { transform: translateY(0) rotate(0deg); }
+  50%     { transform: translateY(-10px) rotate(4deg); }
+}
+
+.approach-l { animation: apL 1.5s ease-in-out infinite alternate; }
+@keyframes apL {
+  from { transform: translateX(0); }
+  to   { transform: translateX(12px); }
+}
+.approach-r { animation: apR 1.5s ease-in-out infinite alternate; }
+@keyframes apR {
+  from { transform: translateX(0); }
+  to   { transform: translateX(-12px); }
+}
+
+.hl-pulse { animation: hlp 1.2s ease-in-out infinite alternate; }
+@keyframes hlp {
+  from { filter: brightness(1); }
+  to   { filter: brightness(1.6) drop-shadow(0 0 8px currentColor); }
+}
+
+/* ── 완료 배너 ── */
+.done-banner {
+  width: 100%;
+  max-width: 860px;
+  margin-top: 14px;
+  background: linear-gradient(135deg, rgba(17,153,142,0.25), rgba(56,239,125,0.15));
+  border: 1px solid rgba(56,239,125,0.3);
+  border-radius: 16px;
+  padding: 14px 22px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  position: relative;
+  z-index: 1;
+  animation: sfade 0.5s ease both;
+}
+
+.done-icon { font-size: 28px; }
+
+.done-text {
+  font-size: 13.5px;
+  color: rgba(255,255,255,0.8);
+  line-height: 1.6;
+}
+
+.done-text b { color: var(--green); }
+
+/* ── 반응식 패널 ── */
+.reaction-eq {
+  width: 100%;
+  max-width: 860px;
+  margin-top: 12px;
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 14px;
+  padding: 12px 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  position: relative;
+  z-index: 1;
+}
+
+.eq-part {
+  font-family: monospace;
+  font-size: 13px;
+  color: rgba(255,255,255,0.75);
+  text-align: center;
+}
+
+.eq-arrow {
+  font-size: 18px;
+  color: rgba(255,255,255,0.3);
+}
+</style>
+</head>
+<body>
+
+<!-- ── 헤더 ── -->
+<div class="header">
+  <div class="header-badge">🔬 Biology Simulation</div>
+  <h1>단백질 형성과 <span>펩타이드 결합</span></h1>
+  <p class="header-sub">아미노산이 어떻게 결합하여 단백질이 되는지 분자 수준에서 확인해보세요</p>
+</div>
+
+<!-- ── 진행 트래커 ── -->
+<div class="tracker" id="tracker"></div>
+
+<!-- ── 메인 카드 ── -->
+<div class="main-card" id="mainCard">
+  <div class="card-tag">MOLECULAR SIMULATION</div>
+  <div class="card-step-num" id="cardStep">STEP 0 / 5</div>
+  <div id="simContent" style="width:100%;display:flex;flex-direction:column;align-items:center;gap:10px;"></div>
+</div>
+
+<!-- ── 설명 패널 ── -->
+<div class="desc-panel" id="descPanel">
+  <div class="desc-accent" id="descAccent"></div>
+  <div class="desc-inner">
+    <div class="desc-top">
+      <div class="desc-icon-wrap" id="descIcon">📌</div>
+      <div class="desc-title" id="descTitle">시작하기 전에...</div>
+    </div>
+    <p class="desc-text" id="descText">
+      <b>▶ 다음 단계</b> 버튼을 눌러 단백질 형성 과정을 분자 수준에서 살펴보세요! 🧬
+    </p>
+  </div>
+</div>
+
+<!-- ── 버튼 ── -->
+<div class="btn-area">
+  <button class="btn-next" id="btnNext" onclick="nextStep()">▶&nbsp; 다음 단계</button>
+  <button class="btn-reset" onclick="resetSim()">↺ &nbsp;처음으로</button>
+</div>
+
+<div id="extraArea"></div>
+
+<script>
+/* ═══════════════════════════════════════════════
+   상수 & 색상
+═══════════════════════════════════════════════ */
+let cur = 0;
+const TOTAL = 5;
+
+const C = {
+  N:'#5c9eff', Ca:'#b0bec5', O:'#ff6e6e', H:'#d0d0d0',
+  R1:'#ffca28', R2:'#66bb6a', peptide:'#ff4f8b',
+  bond:'rgba(255,255,255,0.45)', water:'#4fc3f7',
+  bg1:'rgba(255,202,40,0.07)', bg2:'rgba(102,187,106,0.07)',
+  panelA:'rgba(255,202,40,0.12)', panelB:'rgba(102,187,106,0.12)',
+};
+
+const STEP_META = [
+  { icon:'🧬', label:'아미노산 소개',  accent:'linear-gradient(180deg,#4fc3f7,#00e5ff)' },
+  { icon:'🔍', label:'구조 관찰',      accent:'linear-gradient(180deg,#00e5ff,#69ff94)' },
+  { icon:'⚡', label:'반응 부위',      accent:'linear-gradient(180deg,#ffab40,#ff4f8b)' },
+  { icon:'💧', label:'탈수 반응',      accent:'linear-gradient(180deg,#4fc3f7,#74b9ff)' },
+  { icon:'🔗', label:'펩타이드 결합',  accent:'linear-gradient(180deg,#ff4f8b,#ce93d8)' },
+  { icon:'🏆', label:'단백질 완성',    accent:'linear-gradient(180deg,#69ff94,#00e5ff)' },
+];
+
+/* ═══════════════════════════════════════════════
+   SVG 유틸
+═══════════════════════════════════════════════ */
+const line = (x1,y1,x2,y2,col=C.bond,sw=2.5,extra='') =>
+  `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}"
+         stroke="${col}" stroke-width="${sw}" stroke-linecap="round" ${extra}/>`;
+
+const dbl = (x1,y1,x2,y2,col=C.O,g=4) => {
+  const dx=x2-x1,dy=y2-y1,l=Math.sqrt(dx*dx+dy*dy);
+  const nx=-dy/l*g, ny=dx/l*g;
+  return line(x1+nx,y1+ny,x2+nx,y2+ny,col,2,'')+line(x1-nx,y1-ny,x2-nx,y2-ny,col,2,'');
+};
+
+const circle = (cx,cy,r,fill,stroke='rgba(255,255,255,0.2)',sw=1.5) =>
+  `<circle cx="${cx}" cy="${cy}" r="${r}" fill="${fill}"
+           stroke="${stroke}" stroke-width="${sw}"/>`;
+
+const txt = (x,y,s,col='white',fs=12,fw=700,anchor='middle',extra='') =>
+  `<text x="${x}" y="${y}" text-anchor="${anchor}" fill="${col}"
+         font-size="${fs}" font-weight="${fw}" font-family="Noto Sans KR,sans-serif"
+         style="text-shadow:0 1px 4px rgba(0,0,0,0.8)" ${extra}>${s}</text>`;
+
+/* 원자 */
+const atom = (cx,cy,r,fill,label,fs=12,glow='',extra='') => {
+  const g = glow ? `filter="url(#glow_${glow})"` : '';
+  return `${circle(cx,cy,r,fill,'rgba(255,255,255,0.25)',1.5)}
+          ${circle(cx-r*0.3,cy-r*0.3,r*0.25,'rgba(255,255,255,0.18)','none')}
+          ${txt(cx,cy+fs*0.38,label,'white',fs,700,'middle',g+' '+extra)}`;
+};
+
+/* R기 육각형 */
+const hexR = (cx,cy,r,fill,label) => {
+  const pts = Array.from({length:6},(_,i)=>{
+    const a = Math.PI/3*i - Math.PI/6;
+    return `${cx+r*Math.cos(a)},${cy+r*Math.sin(a)}`;
+  }).join(' ');
+  return `<polygon points="${pts}" fill="${fill}" opacity="0.85"
+                   stroke="rgba(255,255,255,0.3)" stroke-width="1.2"/>
+          ${txt(cx,cy+4,label,'rgba(0,0,0,0.85)',11)}`;
+};
+
+/* 글로우 defs */
+const glowDefs = `<defs>
+  <filter id="glow_N" x="-60%" y="-60%" width="220%" height="220%">
+    <feGaussianBlur stdDeviation="3" result="b"/>
+    <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+  </filter>
+  <filter id="glow_O" x="-60%" y="-60%" width="220%" height="220%">
+    <feGaussianBlur stdDeviation="3" result="b"/>
+    <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+  </filter>
+  <filter id="glow_P" x="-80%" y="-80%" width="260%" height="260%">
+    <feGaussianBlur stdDeviation="5" result="b"/>
+    <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+  </filter>
+  <marker id="arr" markerWidth="7" markerHeight="7" refX="5" refY="3.5" orient="auto">
+    <polygon points="0,0 7,3.5 0,7" fill="rgba(0,229,255,0.7)"/>
+  </marker>
+  <marker id="arrO" markerWidth="7" markerHeight="7" refX="5" refY="3.5" orient="auto">
+    <polygon points="0,0 7,3.5 0,7" fill="rgba(255,110,110,0.8)"/>
+  </marker>
+</defs>`;
+
+/* ═══════════════════════════════════════════════
+   분자 그리기
+═══════════════════════════════════════════════ */
+
+/* 아미노산 A:  H₂N─Cα─C(=O)─OH   (x0, y 기준) */
+function aminoA(x0, y, hlCooh=false, rmOH=false) {
+  const n=x0, ca=x0+68, c=x0+136, oh=x0+190;
+  const oy = y-42;
+  let s='';
+
+  // 결합선
+  s += line(n+22,y, ca-17,y);
+  s += line(ca+17,y, c-17,y);
+  s += dbl(c,y, c,oy, C.O);
+  if(!rmOH) s += line(c+17,y, oh+17,y);
+  else s += line(c+17,y, c+46,y, '#ff4466', 2, 'stroke-dasharray="5,4"');
+
+  // R1 연결
+  s += line(ca,y+17, ca,y+42);
+
+  // 원자
+  s += atom(n,  y, 22, C.N, 'NH₂', 11, hlCooh?'':'N');
+  s += atom(ca, y, 17, C.Ca,'Cα',  11);
+  s += atom(c,  y, 17, C.Ca,'C',   12);
+  s += atom(c, oy-15, 15, C.O, 'O', 11, '','');
+
+  if(!rmOH){
+    const ohFill = hlCooh ? '#ff4466' : C.O;
+    const ohExtra = hlCooh ? 'class="hl-pulse"' : '';
+    s += atom(oh+17, y, 17, ohFill, 'OH', 11, '', ohExtra);
+    if(hlCooh){
+      s += `<rect x="${c-8}" y="${y-14}" width="${oh-c+44}" height="28" rx="10"
+                  fill="none" stroke="#ff4466" stroke-width="1.5" stroke-dasharray="5,3" opacity="0.8"/>`;
+      s += txt(oh+17, y+32, '반응 부위', '#ff6b8a', 10, 600);
+    }
+  }
+
+  s += hexR(ca, y+62, 18, C.R1, 'R₁');
+  return s;
+}
+
+/* 아미노산 B:  H₂N─Cα─C(=O)─OH */
+function aminoB(x0, y, hlNH2=false, rmH=false) {
+  const n=x0, ca=x0+68, c=x0+136, oh=x0+190;
+  const oy = y-42;
+  let s='';
+
+  s += line(n+22,y, ca-17,y);
+  s += line(ca+17,y, c-17,y);
+  s += dbl(c,y, c,oy, C.O);
+  s += line(c+17,y, oh+17,y);
+  s += line(ca,y+17, ca,y+42);
+
+  const nFill = hlNH2 ? '#ffab40' : C.N;
+  const label = rmH ? 'NH' : 'NH₂';
+  const nExtra = hlNH2 ? 'class="hl-pulse"' : '';
+  s += atom(n,  y, 22, nFill, label, 11, '', nExtra);
+  if(hlNH2){
+    s += `<rect x="${n-22}" y="${y-14}" width="46" height="28" rx="10"
+                fill="none" stroke="#ffab40" stroke-width="1.5" stroke-dasharray="5,3" opacity="0.8"/>`;
+    s += txt(n, y+32, '반응 부위', '#ffab40', 10, 600);
+  }
+
+  s += atom(ca, y, 17, C.Ca,'Cα',  11);
+  s += atom(c,  y, 17, C.Ca,'C',   12);
+  s += atom(c, oy-15, 15, C.O, 'O', 11);
+  s += atom(oh+17, y, 17, C.O, 'OH', 11);
+  s += hexR(ca, y+62, 18, C.R2, 'R₂');
+  return s;
+}
+
+/* 물 분자 */
+function water(cx,cy){
+  return `<g class="water-anim" style="transform-origin:${cx}px ${cy}px">
+    ${line(cx,cy, cx-20,cy+18, C.water,2.5)}
+    ${line(cx,cy, cx+20,cy+18, C.water,2.5)}
+    ${atom(cx,cy,20,C.water,'O',12)}
+    ${atom(cx-26,cy+22,13,'#a0d8ef','H',10)}
+    ${atom(cx+26,cy+22,13,'#a0d8ef','H',10)}
+    ${txt(cx,cy+48,'H₂O 방출','#74b9ff',11,700)}
+  </g>`;
+}
+
+/* 다이펩타이드 전체 */
+function dipeptide(y){
+  // H₂N-Cα(R1)-CO-[peptide bond]-NH-Cα(R2)-COOH
+  const x0=18;
+  const n1=x0, ca1=x0+65, c1=x0+128;
+  const pbN=x0+188; // 펩타이드 N
+  const ca2=x0+256, c2=x0+318, oh=x0+370;
+  const oy = y-42;
+
+  let s='';
+
+  // ── 왼쪽 잔기 (A) ──
+  s += line(n1+22,y, ca1-17,y);
+  s += line(ca1+17,y, c1-17,y);
+  s += dbl(c1,y, c1,oy, C.O);
+  s += line(ca1,y+17, ca1,y+40);
+
+  s += atom(n1,y,22,C.N,'NH₂',11,'N');
+  s += atom(ca1,y,17,C.Ca,'Cα',11);
+  s += atom(c1,y,17,C.Ca,'C',12);
+  s += atom(c1,oy-15,15,C.O,'O',11);
+  s += hexR(ca1,y+60,18,C.R1,'R₁');
+
+  // ── 펩타이드 결합 ──
+  // C1 ─ N 결합 (핵심!)
+  s += `<line x1="${c1+17}" y1="${y}" x2="${pbN-20}" y2="${y}"
+              stroke="${C.peptide}" stroke-width="4.5"
+              stroke-linecap="round" filter="url(#glow_P)" class="glow-peptide"/>`;
+
+  // N 원자
+  s += atom(pbN,y,20,C.N,'N',13,'N');
+  // H on N
+  s += line(pbN,y-20, pbN,y-38, C.H,2);
+  s += atom(pbN,y-44,12,C.H,'H',9);
+
+  // N ─ Ca2
+  s += `<line x1="${pbN+20}" y1="${y}" x2="${ca2-17}" y2="${y}"
+              stroke="${C.peptide}" stroke-width="4.5"
+              stroke-linecap="round" filter="url(#glow_P)" class="glow-peptide"/>`;
+
+  // 펩타이드 결합 라벨 박스
+  s += `<rect x="${c1+20}" y="${y+22}" width="140" height="22" rx="11"
+              fill="${C.peptide}" opacity="0.9" filter="url(#glow_P)"/>`;
+  s += txt(c1+90, y+37, 'PEPTIDE BOND', 'white', 10, 700);
+
+  // ── 오른쪽 잔기 (B) ──
+  s += line(ca2+17,y, c2-17,y);
+  s += dbl(c2,y, c2,oy, C.O);
+  s += line(c2+17,y, oh+17,y);
+  s += line(ca2,y+17, ca2,y+40);
+
+  s += atom(ca2,y,17,C.Ca,'Cα',11);
+  s += atom(c2,y,17,C.Ca,'C',12);
+  s += atom(c2,oy-15,15,C.O,'O',11);
+  s += atom(oh+17,y,17,C.O,'OH',11);
+  s += hexR(ca2,y+60,18,C.R2,'R₂');
+
+  // 말단 라벨
+  s += txt(n1, y-62, 'N 말단', '#69ff94', 11, 700);
+  s += `<line x1="${n1}" y1="${y-56}" x2="${n1}" y2="${y-26}"
+              stroke="rgba(105,255,148,0.4)" stroke-width="1" stroke-dasharray="3,3"/>`;
+  s += txt(oh+17, y-62, 'C 말단', '#ffca28', 11, 700);
+  s += `<line x1="${oh+17}" y1="${y-56}" x2="${oh+17}" y2="${y-26}"
+              stroke="rgba(255,202,40,0.4)" stroke-width="1" stroke-dasharray="3,3"/>`;
+
+  return s;
+}
+
+/* 폴리펩타이드 사슬 (5단계) */
+function polypeptide(y){
+  const colors=[C.R1,'#66bb6a','#ce93d8','#ffb347','#4fc3f7'];
+  const labels=['R₁','R₂','R₃','R₄','R₅'];
+  const n=4; const gap=158; const x0=30;
+  let s='';
+
+  // 백본 라인
+  s += `<line x1="${x0}" y1="${y}" x2="${x0+gap*n+40}" y2="${y}"
+              stroke="rgba(255,255,255,0.08)" stroke-width="40" stroke-linecap="round"/>`;
+
+  for(let i=0;i<n;i++){
+    const bx=x0+gap*i;
+    // N
+    s += atom(bx,y,18,C.N,'N',11);
+    s += line(bx+18,y, bx+50,y, i===0?C.bond:C.peptide, i===0?2:4);
+    if(i===0){ s += line(bx,y-18, bx,y-34,C.H,1.5); s += atom(bx,y-40,10,C.H,'H',8); }
+    // Cα
+    s += atom(bx+60,y,17,C.Ca,'Cα',11);
+    s += line(bx+60,y+17, bx+60,y+36);
+    s += hexR(bx+60,y+54,16,colors[i],labels[i]);
+    // C
+    s += line(bx+77,y, bx+110,y,C.bond,2.5);
+    s += atom(bx+120,y,17,C.Ca,'C',12);
+    s += dbl(bx+120,y, bx+120,y-38, C.O);
+    s += atom(bx+120,y-52,13,C.O,'O',10);
+    // 펩타이드 결합선
+    if(i<n-1){
+      s += `<line x1="${bx+137}" y1="${y}" x2="${bx+140+18}" y2="${y}"
+                  stroke="${C.peptide}" stroke-width="4"
+                  class="glow-peptide" filter="url(#glow_P)"/>`;
+    }
+  }
+  // 마지막 OH
+  const lastX = x0+gap*(n-1)+120;
+  s += line(lastX+17,y, lastX+46,y,C.bond,2.5);
+  s += atom(lastX+56,y,17,C.O,'OH',11);
+
+  // 말단
+  s += txt(x0, y-62, 'N 말단', '#69ff94', 11, 700);
+  s += txt(lastX+56, y-62, 'C 말단', '#ffca28', 11, 700);
+
+  // 계속 표시
+  s += txt(lastX+86, y+4, '···', 'rgba(255,255,255,0.4)', 22, 700);
+
+  return s;
+}
+
+/* ═══════════════════════════════════════════════
+   단계별 렌더
+═══════════════════════════════════════════════ */
+function render(step){
+  const el = document.getElementById('simContent');
+  document.getElementById('cardStep').textContent = `STEP ${step} / ${TOTAL}`;
+
+  let svgBody='', legend='', vb='0 0 820 280', extra='';
+
+  switch(step){
+
+  /* ── 0: 아미노산 2개 등장 ── */
+  case 0:
+    vb='0 0 820 280';
+    svgBody = `<g class="svg-fadein">
+      ${glowDefs}
+      <!-- 패널 A -->
+      <rect x="12" y="18" width="288" height="238" rx="20"
+            fill="${C.panelA}" stroke="rgba(255,202,40,0.25)" stroke-width="1.5"/>
+      ${txt(156,12,'아미노산 A','rgba(255,202,40,0.9)',12,700)}
+      ${txt(156,30,'(예: 글라이신)','rgba(255,255,255,0.35)',10,400)}
+      ${aminoA(30,148)}
+      <!-- 패널 B -->
+      <rect x="520" y="18" width="288" height="238" rx="20"
+            fill="${C.panelB}" stroke="rgba(102,187,106,0.25)" stroke-width="1.5"/>
+      ${txt(664,12,'아미노산 B','rgba(102,187,106,0.9)',12,700)}
+      ${txt(664,30,'(예: 알라닌)','rgba(255,255,255,0.35)',10,400)}
+      ${aminoB(536,148)}
+      <!-- + -->
+      ${txt(410,148,'+','rgba(255,255,255,0.2)',34,900)}
+    </g>`;
+    legend=`
+      <div class="leg-item"><div class="leg-dot" style="background:${C.N}"></div>질소(N)</div>
+      <div class="leg-item"><div class="leg-dot" style="background:${C.Ca}"></div>탄소(C)</div>
+      <div class="leg-item"><div class="leg-dot" style="background:${C.O}"></div>산소(O)</div>
+      <div class="leg-item"><div class="leg-dot" style="background:${C.H}"></div>수소(H)</div>
+      <div class="leg-item"><div class="leg-dot" style="background:${C.R1}"></div>곁사슬 R₁</div>
+      <div class="leg-item"><div class="leg-dot" style="background:${C.R2}"></div>곁사슬 R₂</div>`;
+    break;
+
+  /* ── 1: 구조 상세 관찰 ── */
+  case 1:
+    svgBody = `<g class="svg-fadein">
+      ${glowDefs}
+      <rect x="12" y="18" width="288" height="238" rx="20"
+            fill="${C.panelA}" stroke="rgba(255,202,40,0.25)" stroke-width="1.5"/>
+      ${aminoA(30,148)}
+      <!-- A 라벨들 -->
+      <line x1="53" y1="126" x2="53" y2="82" stroke="rgba(92,158,255,0.5)" stroke-width="1" stroke-dasharray="3,3"/>
+      <rect x="20" y="68" width="66" height="18" rx="6" fill="rgba(92,158,255,0.15)" stroke="rgba(92,158,255,0.4)" stroke-width="1"/>
+      ${txt(53,80,'아미노기',`${C.N}`,10,600)}
+      <line x1="224" y1="126" x2="260" y2="82" stroke="rgba(255,110,110,0.5)" stroke-width="1" stroke-dasharray="3,3"/>
+      <rect x="230" y="68" width="60" height="18" rx="6" fill="rgba(255,110,110,0.15)" stroke="rgba(255,110,110,0.4)" stroke-width="1"/>
+      ${txt(260,80,'카복실기',`${C.O}`,10,600)}
+      <line x1="97" y1="210" x2="97" y2="232" stroke="rgba(255,202,40,0.5)" stroke-width="1" stroke-dasharray="3,3"/>
+      ${txt(97,245,'곁사슬(R₁)','rgba(255,202,40,0.8)',10,600)}
+
+      <rect x="520" y="18" width="288" height="238" rx="20"
+            fill="${C.panelB}" stroke="rgba(102,187,106,0.25)" stroke-width="1.5"/>
+      ${aminoB(536,148)}
+      <line x1="559" y1="126" x2="559" y2="82" stroke="rgba(92,158,255,0.5)" stroke-width="1" stroke-dasharray="3,3"/>
+      <rect x="526" y="68" width="66" height="18" rx="6" fill="rgba(92,158,255,0.15)" stroke="rgba(92,158,255,0.4)" stroke-width="1"/>
+      ${txt(559,80,'아미노기',`${C.N}`,10,600)}
+      <line x1="730" y1="126" x2="766" y2="82" stroke="rgba(255,110,110,0.5)" stroke-width="1" stroke-dasharray="3,3"/>
+      <rect x="736" y="68" width="60" height="18" rx="6" fill="rgba(255,110,110,0.15)" stroke="rgba(255,110,110,0.4)" stroke-width="1"/>
+      ${txt(766,80,'카복실기',`${C.O}`,10,600)}
+      <line x1="603" y1="210" x2="603" y2="232" stroke="rgba(102,187,106,0.5)" stroke-width="1" stroke-dasharray="3,3"/>
+      ${txt(603,245,'곁사슬(R₂)','rgba(102,187,106,0.8)',10,600)}
+    </g>`;
+    legend=`
+      <div class="leg-item"><div class="leg-dot" style="background:${C.N}"></div>아미노기(-NH₂)</div>
+      <div class="leg-item"><div class="leg-dot" style="background:${C.O}"></div>카복실기(-COOH)</div>
+      <div class="leg-item"><div class="leg-dot" style="background:${C.R1}"></div>곁사슬 R (종류에 따라 아미노산이 달라짐)</div>`;
+    break;
+
+  /* ── 2: 접근 + 반응 부위 강조 ── */
+  case 2:
+    svgBody = `<g class="svg-fadein">
+      ${glowDefs}
+      <g class="approach-l">
+        <rect x="12" y="18" width="288" height="238" rx="20"
+              fill="${C.panelA}" stroke="rgba(255,100,100,0.4)" stroke-width="2"/>
+        ${aminoA(30,148,true)}
+      </g>
+      <g class="approach-r">
+        <rect x="520" y="18" width="288" height="238" rx="20"
+              fill="${C.panelB}" stroke="rgba(255,171,64,0.4)" stroke-width="2"/>
+        ${aminoB(536,148,true)}
+      </g>
+      <!-- 접근 화살표 -->
+      <line x1="318" y1="148" x2="374" y2="148"
+            stroke="rgba(0,229,255,0.6)" stroke-width="2.5"
+            stroke-dasharray="6,4" marker-end="url(#arr)"/>
+      <line x1="504" y1="148" x2="448" y2="148"
+            stroke="rgba(0,229,255,0.6)" stroke-width="2.5"
+            stroke-dasharray="6,4" marker-end="url(#arr)"/>
+      ${txt(411,138,'접 근 !','rgba(0,229,255,0.7)',11,700)}
+    </g>`;
+    legend=`
+      <div class="leg-item"><div class="leg-dot" style="background:#ff4466"></div>카복실기(-COOH) — 반응 부위</div>
+      <div class="leg-item"><div class="leg-dot" style="background:#ffab40"></div>아미노기(-NH₂) — 반응 부위</div>`;
+    break;
+
+  /* ── 3: 탈수 반응 ── */
+  case 3:
+    svgBody = `<g class="svg-fadein">
+      ${glowDefs}
+      <rect x="12" y="18" width="260" height="238" rx="20"
+            fill="${C.panelA}" stroke="rgba(255,202,40,0.2)" stroke-width="1.5"/>
+      ${txt(140,10,'-OH 이탈','rgba(255,100,100,0.7)',11,600)}
+      ${aminoA(30,148,false,true)}
+
+      <rect x="546" y="18" width="260" height="238" rx="20"
+            fill="${C.panelB}" stroke="rgba(102,187,106,0.2)" stroke-width="1.5"/>
+      ${txt(676,10,'-H 이탈','rgba(255,100,100,0.7)',11,600)}
+      ${aminoB(562,148,false,true)}
+
+      <!-- 물 분자 중앙 -->
+      ${water(411,90)}
+
+      <!-- 이탈 화살표 -->
+      <line x1="270" y1="148" x2="360" y2="110"
+            stroke="rgba(255,110,110,0.6)" stroke-width="2"
+            stroke-dasharray="5,4" marker-end="url(#arrO)"/>
+      <line x1="544" y1="148" x2="454" y2="110"
+            stroke="rgba(255,110,110,0.6)" stroke-width="2"
+            stroke-dasharray="5,4" marker-end="url(#arrO)"/>
+    </g>`;
+    legend=`
+      <div class="leg-item"><div class="leg-dot" style="background:${C.water}"></div>물(H₂O) — 탈수 축합 반응으로 방출</div>
+      <div class="leg-item"><div class="leg-dot" style="background:#ff6e6e"></div>이탈하는 OH / H</div>`;
+    break;
+
+  /* ── 4: 펩타이드 결합 & 다이펩타이드 ── */
+  case 4:
+    vb='0 0 820 310';
+    svgBody = `<g class="svg-fadein">
+      ${glowDefs}
+      ${dipeptide(155)}
+    </g>`;
+    legend=`
+      <div class="leg-item"><div class="leg-dot" style="background:${C.peptide}"></div>펩타이드 결합 (-CO-NH-)</div>
+      <div class="leg-item"><div class="leg-dot" style="background:${C.N}"></div>질소(N)</div>
+      <div class="leg-item"><div class="leg-dot" style="background:${C.Ca}"></div>탄소(C)</div>
+      <div class="leg-item"><div class="leg-dot" style="background:${C.O}"></div>산소(O)</div>
+      <div class="leg-item"><div class="leg-dot" style="background:${C.R1}"></div>곁사슬 R₁</div>
+      <div class="leg-item"><div class="leg-dot" style="background:${C.R2}"></div>곁사슬 R₂</div>`;
+    extra = `<div class="formula-chips">
+      <div class="chip">아미노산 A + 아미노산 B</div>
+      <div class="chip">→</div>
+      <div class="chip pink">다이펩타이드</div>
+      <div class="chip">+</div>
+      <div class="chip cyan">H₂O</div>
+    </div>`;
+    break;
+
+  /* ── 5: 폴리펩타이드 ── */
+  case 5:
+    vb='0 0 820 270';
+    svgBody = `<g class="svg-fadein">
+      ${glowDefs}
+      ${txt(410,14,'폴리펩타이드 → 단백질','rgba(105,255,148,0.9)',14,700)}
+      ${polypeptide(130)}
+    </g>`;
+    legend=`
+      <div class="leg-item"><div class="leg-dot" style="background:${C.peptide}"></div>펩타이드 결합 (반복)</div>
+      <div class="leg-item"><div class="leg-dot" style="background:#aaa"></div>아미노산 잔기</div>
+      <div class="leg-item"><div class="leg-dot" style="background:${C.R1}"></div>다양한 곁사슬</div>`;
+    extra = `<div class="formula-chips">
+      <div class="chip">n개의 아미노산</div>
+      <div class="chip">→</div>
+      <div class="chip green">폴리펩타이드</div>
+      <div class="chip">+</div>
+      <div class="chip cyan">(n-1) H₂O</div>
+    </div>`;
+    break;
+  }
+
+  el.innerHTML = `
+    <svg class="mol-svg" viewBox="${vb}" xmlns="http://www.w3.org/2000/svg">
+      ${svgBody}
+    </svg>
+    <div class="legend">${legend}</div>
+    ${extra}`;
+
+  updateTracker(step);
+  updateDesc(step);
+
+  const ea = document.getElementById('extraArea');
+  if(step===TOTAL){
+    ea.innerHTML=`
+    <div class="done-banner">
+      <div class="done-icon">🏆</div>
+      <div class="done-text">
+        <b>시뮬레이션 완료!</b><br>
+        아미노산의 종류와 배열 순서에 따라 수만 가지 단백질이 만들어져요.
+        단백질은 효소·호르몬·항체 등 우리 몸의 거의 모든 기능에 관여합니다.
+      </div>
+    </div>`;
+  } else {
+    ea.innerHTML='';
+  }
+}
+
+/* ═══════════════════════════════════════════════
+   트래커 업데이트
+═══════════════════════════════════════════════ */
+function updateTracker(step){
+  const t = document.getElementById('tracker');
+  let html='';
+  for(let i=0;i<=TOTAL;i++){
+    const m=STEP_META[i];
+    const cls = i<step?'done': i===step?'active':'';
+    const lcls= i<step?'done': i===step?'active':'';
+    html+=`<div class="track-step">
+      <div class="track-dot ${cls}">${i<step?'✓':(i===step?i:i)}</div>
+      <div class="track-label ${lcls}">${m.label}</div>
+    </div>`;
+    if(i<TOTAL) html+=`<div class="track-line ${i<step?'done':''}"></div>`;
+  }
+  t.innerHTML=html;
+}
+
+/* ═══════════════════════════════════════════════
+   설명 업데이트
+═══════════════════════════════════════════════ */
+function updateDesc(step){
+  const icons  =['🧬','🔍','⚡','💧','🔗','🏆'];
+  const titles =['아미노산이란?','아미노산의 구조','반응 부위 확인','탈수 축합 반응','펩타이드 결합 형성','폴리펩타이드와 단백질'];
+  const texts  =[
+    `단백질의 기본 단위인 <span class="hl">아미노산</span>이에요.<br>
+     모든 아미노산에는 공통적으로 <span class="hlo">아미노기(-NH₂)</span>와 <span class="hl">카복실기(-COOH)</span>가 있고,
+     각 아미노산을 구별하는 <span class="hly">곁사슬(R기)</span>이 있어요. 두 아미노산이 결합 준비를 하고 있습니다.`,
+
+    `분자 구조를 자세히 살펴봐요.<br>
+     <span class="hl">아미노기(-NH₂)</span>는 질소(N)를 포함하고, <span class="hl">카복실기(-COOH)</span>는 탄소(C)와 산소(O) 두 개로 이루어져 있어요.
+     <span class="hly">곁사슬(R₁, R₂)</span>의 종류에 따라 약 <b>20가지</b>의 아미노산이 구별돼요.`,
+
+    `두 아미노산이 가까워지면서 반응할 부위가 활성화됩니다!<br>
+     아미노산 A의 <span class="hl">카복실기(-COOH)</span>와 아미노산 B의 <span class="hlo">아미노기(-NH₂)</span>가
+     서로를 향해 접근해요. 이 두 부위에서 <span class="hlp">탈수 반응</span>이 시작됩니다.`,
+
+    `<span class="hlp">탈수 축합 반응</span>이 일어났어요!<br>
+     아미노산 A의 카복실기에서 <b>-OH</b>가, 아미노산 B의 아미노기에서 <b>-H</b>가 빠져나와
+     <span class="hl">물 분자(H₂O) 1개</span>가 만들어집니다. 이처럼 물이 빠져나오며 결합하는 걸 <span class="hlp">탈수 축합</span>이라 해요.`,
+
+    `<span class="hlp">펩타이드 결합(-CO-NH-)</span>이 형성됐어요! 🎉<br>
+     A의 <b>-C=O</b>(카보닐)과 B의 <b>-NH</b>가 공유결합으로 연결되어 <span class="hlg">다이펩타이드</span>가 완성됐습니다.
+     왼쪽 끝을 <span class="hlg">N 말단</span>, 오른쪽 끝을 <span class="hly">C 말단</span>이라 불러요.`,
+
+    `이 결합이 수백~수천 번 반복되면 <span class="hlg">폴리펩타이드</span>가 되고, 고유한 3D 구조로 접혀 <span class="hl">단백질</span>이 돼요.<br>
+     아미노산 <b>n</b>개가 결합하면 펩타이드 결합 <b>(n-1)</b>개, 물 분자 <span class="hl">(n-1)개</span>가 방출됩니다.
+     아미노산의 <span class="hlo">종류</span>와 <span class="hly">순서</span>가 단백질의 구조와 기능을 결정해요.`
+  ];
+
+  const m = STEP_META[step];
+  document.getElementById('descIcon').textContent  = icons[step];
+  document.getElementById('descTitle').textContent = titles[step];
+  document.getElementById('descText').innerHTML    = texts[step];
+  document.getElementById('descAccent').style.background = m.accent;
+}
+
+/* ═══════════════════════════════════════════════
+   버튼
+═══════════════════════════════════════════════ */
+function nextStep(){
+  if(cur<TOTAL){ cur++; render(cur); }
+  if(cur===TOTAL){
+    document.getElementById('btnNext').disabled=true;
+    document.getElementById('btnNext').textContent='✅ 완료';
+  }
+}
+
+function resetSim(){
+  cur=0;
+  document.getElementById('btnNext').disabled=false;
+  document.getElementById('btnNext').textContent='▶  다음 단계';
+  document.getElementById('extraArea').innerHTML='';
+  render(0);
+}
+
+// 초기 실행
+render(0);
+</script>
+</body>
+</html>
